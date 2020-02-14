@@ -113,8 +113,61 @@ The fixed effect model equation is:
 $$Y_{it}=\alpha_t+\beta X_{it}+\gamma Z_{it}+S_i+\epsilon_{it}$$
 where $\beta$ and vector $\gamma$ are regression coefficients and $\epsilon_{it}$ is error term. In fixed effect model, we assume that: (1) The normality of error terms; (2) The homogeneity of variance assumption; (3) Independent assumption: in time series data, the error terms are allowed to be autocorrelated within states, which means that there is autocorrelation relationship across time in one specific state. However, in a fixed time, the error terms should be independent across states.
 
-## 3.2 Fitting result
-Because our data set is from observation,in order to draw inferences about the causal effect of an active treatment versus a control treatment based on data in which the investigator did not decide which units would receive treatment and which would receive control. A useful way is to use logistic regression to estimate their propensity scores, so that we can estimate each unit’s probability of being treated as a function of covariates.
+## 3.2 Propensity Score Matching
+
+###3.2.1 Propensity score estimation
+Because our data set is collected from National Highway Traffic Safety Administration and it is observation data ,in order to draw inferences about the causal effect of an active treatment versus a control treatment based on data in which the investigator did not decide which units would receive treatment and which would receive control. A useful way is to use logistic regression to estimate each unit’s probability of being treated as a function of covariates
+
+First, we can check the mean for each covariate by treatment status
+
+```{r,echo=FALSE,include=FALSE}
+library(knitr)
+data_cov<-c("unemp","beertax","spirits")
+result1<-DATA%>%
+  group_by(jail) %>%
+  select(one_of(data_cov))%>%
+  summarise_all(funs(mean))
+```
+
+```{r,echo=FALSE}
+options(knitr.kable.NA = '')
+kable(result1, caption = 'table1')
+```
+
+From the table1 above, we can find that those means of same covariate are quite different when jail=0 and jail=1. It means that when we compare influence of jail sentence on facilities, we can’t ignore the influence of other covariates. Therefore we need to reconstruct our data set by creating some blocks of observations based on covatiates, and then calculate propensity score of having jail sentence in a certain state by logistic regression.
+
+```{r,echo=FALSE,include=FALSE}
+library(MatchIt)
+library(dplyr)
+library(ggplot2)
+Jail<-as.integer(ifelse(DATA$jail=="yes",1,0))
+Data1<-data.frame(Jail,DATA[-2])
+log1<-glm(Jail~unemp+beertax+spirits+year+state-1,data=Data1,family=binomial())
+predf1<-data.frame(pr_score1=predict(log1,type="response"),Jail=log1$model$Jail)
+```
+
+###3.2.2 Executing a matching algorithm
+After calculating the propensity score, we could use some methods to restrict the sample to observations within the region of common support and then estimate the mean difference in facilities with and without jail sentence. Rubin and others have argued that this is sufficient to eliminate 95% of the bias due to confounding of treatment status with covariates. The method we use is to find pairs of observations that have very similar propensity scores but differ in their treatment status and then match them and put the matched observations in a new dataframe. Through this method we can reconstruct out data set and we can use this data set to fit our model without worrying about the confounding effect. We can evaluate covariate balance in the matched sample by calculating the mean of each covariate.
+
+```{r,echo=FALSE,include=FALSE}
+DATA_nomiss <- Data1%>%na.omit()
+mod_match <- matchit(Jail~unemp+beertax+spirits,method = "nearest", data = DATA_nomiss)
+data_match<-match.data(mod_match)
+```
+
+```{r,echo=FALSE,include=FALSE}
+data_cov<-c("unemp","beertax","spirits")
+result2<-data_match %>%
+  group_by(Jail) %>%
+  select(one_of(data_cov))%>%
+  summarise_all(funs(mean))
+```
+```{r,echo=FALSE}
+options(knitr.kable.NA = '')
+kable(result2, caption = 'table2')
+```
+
+From table 2 we can see that the means of the same covariate are almost same. We attain a high degree of balance on the covariates included in the model. 
 
 ```{r,echo=FALSE}
 library(MatchIt)
