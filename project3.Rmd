@@ -1,0 +1,123 @@
+---
+title: "Mandatory Jail Sentence Policy and Traffic Fatalities"
+output:
+  html_document:
+    df_print: paged
+    fig_caption: yes
+    number_sections: yes
+  pdf_document: default
+---
+
+Team ID: 9
+
+Zhikuan Quan (Model Building); Daidai Zhang (Interpretation of model); Wenfeng Chang (Model Analysis); Jinghui Li (Exploratory Data Analysis)
+
+Github repo: "http://github.com/zhikuanquan/STA-207.git"
+
+```{r,echo=FALSE,include=FALSE}
+### Input Data ###
+library(AER)
+library(plm)
+library(stargazer)
+library(tidyverse)
+data("Fatalities")
+# Missing Values
+# since 1982-1988 is no, we assume it is "no" in missing place(Need some paper/law to ensure)
+tna<-which(is.na(Fatalities),arr.ind= TRUE) # CA 1988 missing: jail, service
+Fatalities[28,15]<-"no" 
+
+### DATA of interest ###
+DATA<-Fatalities %>%
+  #filter(complete.cases(.)) %>%
+  transmute(fr = 10000*((fatal/pop)), jail = as.factor(jail),state = as.factor(state), year = as.factor(year),beertax = beertax,emppop = emppop,miles = miles,income = income,drinkage = as.factor(floor(drinkage)), unemp=unemp, spirits = spirits,service = as.factor(service),breath=as.factor(breath),afatal=10000*(afatal/pop))
+
+```
+
+# 1. Introduction
+
+
+# 2. Exploratory Data Analysis
+
+
+# 3. Fixed Effect Panel Model
+## 3.1 Model Building
+Fixed effect panel model is efficient since it controls for all time-invariant differences between the individuals. For instance, the transportation industry or the climate of specific state are fixed over short time, but they actually influence the fatality rate of traffic accident. In this case, fixed effect panel model is used to reduced the omitted variable biases of not accounting for these variables. 
+
+Through exploratory data analysis, the US traffic fatalities data in 48 states except for Alaska and Hawaii from 1982 to 1988 is balanced. In addition, whether there is mandatory jail sentence in the state seems to affect the reduced traffic fatality rate in each state. Since the unemployment rate, tax on case of beer and spirits consumption are correlated to the traffic fatality rate of the year in each state, we consider them as the time-variant variables in our fixed effect panel model. In this case, we set the model notations as below:
+
+- Response variable $Y_{it}$: the traffic fatality rate of state $i$ in time $t$. In this case, we have $Y_{it}=(10000\times F_{it})/P_{it}$, where $F_{it}$ represents the number of vehicle fatalities of the state $i$ in year $t$ and $P_{it}$ is the population of the state $i$ in year $t$. In this report, the traffic fatality rate can be interpreted as the number of death caused by traffic per 10000 population;
+
+- Time fixed effect $\alpha_t$: time specific intercept. It represents any change over time (1982-1988) that affects all observational units in the same way. The level of time effect is 7;
+
+- Mandatory jail sentence indicator $X_{it}$: $X_{it}=1$ when there is mandatory jail sentence of state $i$ in time $t$; $X_{it}=0$ when there is no mandatory jail sentence of state $i$ in time $t$;  
+
+- Covariates vector $Z_{it}$: potential time-varying covariates. In this case, we mainly focus on three variables: the unemployment rate, beer tax and spirits consumption.
+
+- State fixed effect $S_i$: In this case, each level of $S_i$ represents one of 48 states in US excluding Alaska and Hawaii.
+
+The fixed effect model equation is:
+$$Y_{it}=\alpha_t+\beta X_{it}+\gamma Z_{it}+S_i+\epsilon_{it}$$
+where $\beta$ and vector $\gamma$ are regression coefficients and $\epsilon_{it}$ is error term. In fixed effect model, we assume that: (1) The normality of error terms; (2) The homogeneity of variance assumption; (3) Independent assumption: in time series data, the error terms are allowed to be autocorrelated within states, which means that there is autocorrelation relationship across time in one specific state. However, in a fixed time, the error terms should be independent across states.
+
+## 3.2 Fitting result
+Because our data set is from observation,in order to draw inferences about the causal effect of an active treatment versus a control treatment based on data in which the investigator did not decide which units would receive treatment and which would receive control. A useful way is to use logistic regression to estimate their propensity scores, so that we can estimate each unit’s probability of being treated as a function of covariates.
+
+```{r,echo=FALSE}
+library(MatchIt)
+library(dplyr)
+library(ggplot2)
+Jail<-as.integer(ifelse(DATA$jail=="yes",1,0))
+Data1<-data.frame(Jail,DATA[-2])
+log1<-glm(Jail~unemp+beertax+spirits+year+state-1,data=Data1,family=binomial())
+predf1<-data.frame(pr_score1=predict(log1,type="response"),Jail=log1$model$Jail)
+summary(log1)
+labs <- paste("probability:",c("jail","no jail"))
+predf1 %>%
+  mutate(Jail = ifelse(Jail == "1", labs[1], labs[2])) %>%
+  ggplot(aes(x = pr_score1)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~Jail) +
+  xlab("Probability of jail") +
+  theme_bw()
+
+```
+
+
+```{r,echo=FALSE}
+DATA_nomiss <- Data1%>%na.omit()
+mod_match <- matchit(Jail~unemp+beertax+spirits,method = "nearest", data = DATA_nomiss)
+data_match<-match.data(mod_match)
+dim(data_match)
+```
+
+```{r}
+data_cov<-c("unemp","beertax","spirits")
+Data1%>%
+  group_by(Jail) %>%
+  select(one_of(data_cov))%>%
+  summarise_all(funs(mean))
+data_cov<-c("unemp","beertax","spirits")
+data_match %>%
+  group_by(Jail) %>%
+  select(one_of(data_cov))%>%
+  summarise_all(funs(mean))
+```
+
+From the result, we can see that after matching,  we can attain a high degree of balance on the covariates included in the model.
+
+```{r}
+plm1<- plm(fr ~ Jail+unemp+beertax+spirits, data = data_match, index = c("state","year"),model = "within", effect = "twoways")
+summary(plm1)
+```
+Using the data set after matching, we can find that jail is not significant.
+
+```{r}
+lm1<- lm(fr ~ Jail+unemp+beertax+spirits+year+state-1, data = data_match)
+plot(lm1)
+
+```
+
+
+
+
+
