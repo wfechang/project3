@@ -165,6 +165,7 @@ summary(plm1)
 ```
 Using the data set after matching, we can find that jail is not significant.
 
+##3.3 Model diagnostic
 ```{r}
 lm1<- lm(fr ~ Jail+unemp+beertax+spirits+year+state-1, data = data_match)
 plot(lm1)
@@ -175,7 +176,6 @@ plot(lm1)
 library(nortest)
 ```
 
-Model diagnostic
 
 ```{r}
 boxCox(lm(fr ~ Jail+unemp+beertax+spirits+year+state-1, data = data_match))
