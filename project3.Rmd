@@ -171,6 +171,45 @@ plot(lm1)
 
 ```
 
+```{r}
+library(nortest)
+```
+
+Model diagnostic
+
+```{r}
+boxCox(lm(fr ~ Jail+unemp+beertax+spirits+year+state-1, data = data_match))
+```
+
+```{r}
+lm2<-lm(log(fr) ~ Jail+unemp+beertax+spirits+year+state-1, data = data_match)
+plot(lm2)
+```
+
+Check normality
+```{r}
+ad.test(lm2$residuals)$p.value
+```
+
+Check equal variance
+```{r}
+install.packages("lmtest")
+```
+```{r}
+library(lmtest)
+```
+
+```{r}
+bptest(lm2) 
+```
+
+```{r}
+summary(lm2)
+```
+
+
+
+
 
 
 
